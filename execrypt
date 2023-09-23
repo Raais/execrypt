@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Installation
+# sudo curl -sSL https://raw.githubusercontent.com/Raais/execrypt/main/execrypt -o /usr/local/bin/execrypt && sudo chmod a+x /usr/local/bin/execrypt
+
+function show_help {
+  echo "execrypt - Execute encrypted shell scripts"
+  echo "Usage: $0 [-g] <encrypted_script.cpt>"
+  echo ""
+  echo "Options:"
+  echo "  -g              Use Zenity for password input (GUI mode)"
+  echo "  -h              Show this help message"
+  exit 0
+}
+
+function execute_decrypted_script {
+  decrypted_script="$1"
+  temp_script=$(mktemp /tmp/execrypt.XXXXXX)
+  echo "$decrypted_script" > "$temp_script"
+  chmod +x "$temp_script"
+  /bin/bash "$temp_script"
+  rm -f "$temp_script"
+}
+
+if ! command -v ccat &> /dev/null; then
+  echo "ccrypt is not installed. Please install ccrypt."
+  exit 1
+fi
+
+gui_mode=false
+
+while getopts ":gh" opt; do
+  case $opt in
+    g)
+      gui_mode=true
+      ;;
+    h)
+      show_help
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+  esac
+done
+
+shift "$((OPTIND-1))"
+
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 [-g] <encrypted_script.cpt>"
+  exit 1
+fi
+
+encrypted_script="$1"
+
+if $gui_mode; then
+  password=$(zenity --password --title="Enter Password")
+else
+  read -sp "Enter Password: " password
+  echo
+fi
+
+if [ $? -ne 0 ] || [ -z "$password" ]; then
+  echo "Operation canceled."
+  exit 1
+fi
+
+decrypted_script=$(ccat -q -K "$password" "$encrypted_script")
+
+if [ $? -eq 0 ]; then
+  execute_decrypted_script "$decrypted_script"
+else
+  echo "Failed to decrypt. Please check the password."
+  exit 1
+fi
